@@ -1,0 +1,7 @@
+<library path="lib/libfranka_more_controllers">
+  <class name="franka_more_controllers/ForceController" type="franka_more_controllers::ForceController" base_class_type="controller_interface::ControllerBase">
+    <description>
+        Direct force controller
+    </description>
+  </class>
+</library>

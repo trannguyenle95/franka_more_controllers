@@ -1,0 +1,8 @@
+
+force_controller:
+    type: franka_more_controllers/ForceController
+    arm_id: panda
+
+model_example_controller:
+    type: franka_more_controllers/ModelExampleController
+    arm_id: panda
