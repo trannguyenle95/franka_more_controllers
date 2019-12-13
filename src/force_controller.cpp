@@ -84,56 +84,47 @@ void ForceController::starting(const ros::Time& /* time */) {
 }
 void ForceController::updateFTsensor(const geometry_msgs::WrenchStamped::ConstPtr &msg){
   geometry_msgs::Wrench f_meas = msg->wrench;
-	f_cur_buffer_ = f_meas.force.x;
+	f_current(0) = f_meas.force.x;
   f_current(1) = f_meas.force.y;
-  f_current(2) = f_meas.force.z;
+  f_cur_buffer_ = f_meas.force.z;
   f_current(3) = f_meas.torque.x;
   f_current(4) = f_meas.torque.y;
   f_current(5) = f_meas.torque.z;
-  f_current(0) = first_order_lowpass_filter();
+  f_current(2) = first_order_lowpass_filter();
 }
 void ForceController::update(const ros::Time& /* time */,
                                             const ros::Duration& period) {
-  elapsed_time_ += period;
-
-  double radius = 0.2;
-  double angle = M_PI / 4 * (1 - std::cos(M_PI / 5.0 * elapsed_time_.toSec()));
-  double delta_z = radius * (std::cos(angle) - 1);
   Eigen::Matrix<double, 6,6> kp_force,ki_force;
-  kp_force.setZero();
+  kp_force.setZero();  // pose_current[14] = pose_current[14] + delta_z1 * 0.0001; //for z
   ki_force.setZero();
-  // kp_force(2,2)= 0.0001; //
-  // ki_force(2,2)= 0.0000001; // works for z
-  kp_force(0,0)= 0.00001; //00000001
-  ki_force(0,0)= 0.000005; // 00001
+
+  kp_force(2,2)= 0.000001; //00000001
+  ki_force(2,2)= 0.0000001; // 0 works
   //// set the desired force and calculate the force error.
   Eigen:: Matrix<double,6,1> f_desired;
-  f_desired << 5,0,0,0,0,0; //force desired in z axis
+  f_desired << 0,0,-5,0,0,0; //force desired in z axis
 
   err_force = f_desired - f_current;
-  err_force_int += err_force*elapsed_time_.toSec(); //integral term of force error
+  err_force_int += err_force*period.toSec(); //integral term of force error
 
  //// calculate new pos in global frame
   Eigen::VectorXd force_ctrl(6);
   force_ctrl = kp_force*err_force + ki_force*err_force_int;
-  delta_z1 = force_ctrl[0];
-  std::array<double, 16> pose_current = cartesian_pose_handle_->getRobotState().O_T_EE_d;
-  std::array<double, 16> pose_current_wrong = cartesian_pose_handle_->getRobotState().O_T_EE;
+  delta_z1 = force_ctrl[2];
 
-  // delta_z1 -= 0.0001;
-  pose_current[12] = pose_current[12] + delta_z1 * 0.0001; //for x. 0.001 works smooth and fast
-  // pose_current[14] = pose_current[14] + delta_z1 * 0.0001; //for z
+  std::array<double, 16> last_cmd_pose = cartesian_pose_handle_->getRobotState().O_T_EE_d;
+  last_cmd_pose[14] += delta_z1;
 
   std_msgs::Float64 msg;
-  msg.data = pose_current[12];
+  msg.data = last_cmd_pose[14];
   pub_data.publish(msg);
   // std::cout << "pose x : " << pose_current[12] << "\t delta_x1 : " << delta_z1 << "\t force control : " << force_ctrl[0] << std::endl;
   // if (cout < 1000) {
-    // std::cout << "current pose :" << pose_current[12]  << "\t current pose withoud d" << pose_current_wrong[12] << std::endl;
+    // std::cout << "current pose :" << period.toSec()  << std::endl;
   //   cout++;
   // }
 
-  cartesian_pose_handle_->setCommand(pose_current);
+  cartesian_pose_handle_->setCommand(last_cmd_pose);
 }
 double ForceController::first_order_lowpass_filter()
 {

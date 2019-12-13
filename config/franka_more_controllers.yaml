@@ -3,6 +3,18 @@ force_controller:
     type: franka_more_controllers/ForceController
     arm_id: panda
 
+force_controller_invdynamics:
+    type: franka_more_controllers/ForceControllerInvDynamics
+    arm_id: panda
+    joint_names:
+        - panda_joint1
+        - panda_joint2
+        - panda_joint3
+        - panda_joint4
+        - panda_joint5
+        - panda_joint6
+        - panda_joint7
+    param_1: 5
 model_example_controller:
     type: franka_more_controllers/ModelExampleController
     arm_id: panda

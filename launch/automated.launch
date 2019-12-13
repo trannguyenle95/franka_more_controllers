@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<launch>
+  <arg name="robot_ip" />
+  <include file="$(find franka_control)/launch/franka_control.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)" />
+    <arg name="load_gripper" value="true" />
+  </include>
+  <include file="$(find panda_moveit_config)/launch/move_group.launch">
+    <arg name="load_gripper" value="true" />
+  </include>
+  <arg name="axis"  default="random"/>
+  <param name="applied_axis" type="string" value="$(arg axis)"/>
+
+  <arg name="desired_force"  default="0"/>
+  <param name="FT_desired" type="double" value="$(arg desired_force)"/>
+
+  <rosparam command="load" file="$(find franka_more_controllers)/config/franka_more_controllers.yaml"/>
+  <node name="automated" pkg="franka_more_controllers" type="automated.py" output="screen" required="true">
+    <rosparam param="automated_step">[steps]</rosparam>
+    <rosparam param="controllers">[force_controller_invdynamics, position_joint_trajectory_controller]</rosparam>
+  </node>
+</launch>

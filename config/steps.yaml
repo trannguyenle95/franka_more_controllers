@@ -1,0 +1,26 @@
+- type: set_collision_behavior
+  params:
+    torques: [20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0]
+    forces: [20.0, 20.0, 30.0, 25.0, 25.0, 25.0]
+
+# Move to A pose
+- type: moveit_cart
+  params:
+    pos: [0.321923815081, 0.00466224121569, 0.381090223603]
+    rot: [0.0108892906705, -0.926104981096, 0.376920301196, -0.0119194749773]
+    acc: 0.25
+    vel: 0.25
+
+# Run custom controller for 4 seconds.
+- type: run_controller
+  params:
+    controller_name: force_controller_invdynamics
+    wait: 60
+
+
+# Move to initial joint configuration
+- type: moveit_joint
+  params:
+    position: [0.000238275,-0.784714,-0.000123644,-2.3558,-0.000510225,1.57098,0.785892]
+    acc: 0.25
+    vel: 0.25

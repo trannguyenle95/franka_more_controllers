@@ -4,4 +4,9 @@
         Direct force controller
     </description>
   </class>
+  <class name="franka_more_controllers/ForceControllerInvDynamics" type="franka_more_controllers::ForceControllerInvDynamics" base_class_type="controller_interface::ControllerBase">
+    <description>
+        Direct force controller with inverse dynamics
+    </description>
+  </class>
 </library>
