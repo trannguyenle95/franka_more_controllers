@@ -1,7 +1,7 @@
 <library path="lib/libfranka_more_controllers">
   <class name="franka_more_controllers/ForceController" type="franka_more_controllers::ForceController" base_class_type="controller_interface::ControllerBase">
     <description>
-        Direct force controller
+        Direct force controller using Franka Cartersian Pose interface
     </description>
   </class>
   <class name="franka_more_controllers/ForceControllerInvDynamics" type="franka_more_controllers::ForceControllerInvDynamics" base_class_type="controller_interface::ControllerBase">

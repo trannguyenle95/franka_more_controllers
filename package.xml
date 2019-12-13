@@ -3,10 +3,10 @@
   <name>franka_more_controllers</name>
   <version>0.0.0</version>
   <description>TODO description</description>
-  <maintainer email="mattia.rh@gmail.com">Mattia Racca</maintainer>
+  <maintainer email="tran.nguyenle@aalto.fi">Tran Nguyen Le</maintainer>
   <license>Apache 2.0</license>
 
-  <author>Mattia Racca</author>
+  <author>Tran Nguyen Le</author>
 
   <buildtool_depend>catkin</buildtool_depend>
 
