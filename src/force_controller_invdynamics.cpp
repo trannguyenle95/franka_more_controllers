@@ -162,12 +162,12 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
   Eigen::Vector3d position(transform.translation());
   Eigen::Quaterniond orientation(transform.linear());
 
-// FORCE CONTROL
+  // FORCE CONTROL
   Eigen::Matrix<double, 6,6> kp_force,ki_force;
   kp_force.setZero();
   ki_force.setZero();
   kp_force(axis,axis)= 0.00001;
-  ki_force(axis,axis)= 0.0001;
+  ki_force(axis,axis)= 0.00008;
 
   Eigen:: Matrix<double,6,1> desired_force_torque, err_force;
   desired_force_torque.setZero();
@@ -181,7 +181,7 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
   position_d_(axis) += force_ctrl(axis);   // compute error to desired pose
 
   Eigen::Matrix<double, 6, 1> error;
-  error.head(3) << position - position_d_;   // position error
+  error.head(3) << position - position_d_;  // position error
   std::cout << "error in " << which_axis <<": " << err_force(axis) << std::endl;
 
   // orientation error

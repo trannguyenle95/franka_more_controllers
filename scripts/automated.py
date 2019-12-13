@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# This code was adopted and modified for research purposes by Tran Nguyen Le.
+# The original code was originally developed by Franka Emika's developer
+# and can be found at https://github.com/frankaemika/icra18-fci-tutorial.
 
 import actionlib_msgs.msg
 import franka_gripper.msg
@@ -124,7 +127,6 @@ def gripper_grasp(ctx, width,
         if rospy.is_shutdown():
             sys.exit(0)
 
-
 def run_controller(ctx, controller_name, wait=5):
     ctx.load_controllers([controller_name])
     if wait is not None:
@@ -158,7 +160,7 @@ def create_step(t, params):
 
 if __name__ == '__main__':
     moveit_commander.roscpp_initialize(sys.argv)
-    rospy.init_node('demo')
+    rospy.init_node('automated')
 
     rospy.loginfo('Waiting for controller_manager/load_controller')
     load_controller = rospy.ServiceProxy(
