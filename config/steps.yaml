@@ -15,7 +15,7 @@
 - type: run_controller
   params:
     controller_name: force_controller_invdynamics
-    wait: 40
+    wait: 60
 
 
 # Move to initial joint configuration

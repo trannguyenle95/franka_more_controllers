@@ -228,6 +228,9 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
       filter_params_ * cartesian_damping_target_ + (1.0 - filter_params_) * cartesian_damping_;
   nullspace_stiffness_ =
       filter_params_ * nullspace_stiffness_target_ + (1.0 - filter_params_) * nullspace_stiffness_;
+
+  desired_force_torque_value = filter_params_ * target_desired_force_torque_value + (1 - filter_params_) * desired_force_torque_value;
+
   position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
   Eigen::AngleAxisd aa_orientation_d(orientation_d_);
   Eigen::AngleAxisd aa_orientation_d_target(orientation_d_target_);
@@ -267,6 +270,8 @@ void ForceControllerInvDynamics::complianceParamCallback(
   cartesian_damping_target_.bottomRightCorner(3, 3)
       << 2.0 * sqrt(config.rotational_stiffness) * Eigen::Matrix3d::Identity();
   nullspace_stiffness_target_ = config.nullspace_stiffness;
+  target_desired_force_torque_value = config.desired_force_torque;
+
 }
 
 void ForceControllerInvDynamics::equilibriumPoseCallback(

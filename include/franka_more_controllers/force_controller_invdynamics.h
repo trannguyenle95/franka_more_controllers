@@ -51,6 +51,7 @@ class ForceControllerInvDynamics : public controller_interface::MultiInterfaceCo
   Eigen::Matrix<double, 6, 6> cartesian_stiffness_target_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_;
   Eigen::Matrix<double, 6, 6> cartesian_damping_target_;
+  double target_desired_force_torque_value;
   Eigen::Matrix<double, 7, 1> q_d_nullspace_;
     Eigen::Matrix<double, 6, 1> err_force_int;
   Eigen::Vector3d position_d_;

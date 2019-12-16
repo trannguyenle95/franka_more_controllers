@@ -19,4 +19,10 @@
     <rosparam param="automated_step">[steps]</rosparam>
     <rosparam param="controllers">[force_controller_invdynamics, position_joint_trajectory_controller]</rosparam>
   </node>
+  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_example_controllers)/launch/robot.rviz"/>
+  <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" />
+  <node name="dynamic_reconfigure_compliance_param_node" pkg="dynamic_reconfigure" type="dynparam"
+       args="set dynamic_reconfigure_compliance_param_node desired_force_torque $(arg desired_force)" />
+
+
 </launch>
