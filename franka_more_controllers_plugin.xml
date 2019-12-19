@@ -9,4 +9,9 @@
         Direct force controller with inverse dynamics
     </description>
   </class>
+  <class name="franka_more_controllers/HybridController" type="franka_more_controllers::HybridController" base_class_type="controller_interface::ControllerBase">
+    <description>
+        Hybrid force motion controller with inverse dynamics
+    </description>
+  </class>
 </library>

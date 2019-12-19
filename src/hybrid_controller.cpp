@@ -1,6 +1,6 @@
 // Copyright (c) 2017 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
-#include <franka_more_controllers/force_controller_invdynamics.h>
+#include <franka_more_controllers/hybrid_controller.h>
 
 #include <cmath>
 #include <memory>
@@ -13,24 +13,24 @@
 
 namespace franka_more_controllers {
 
-bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
+bool HybridController::init(hardware_interface::RobotHW* robot_hw,
                                                ros::NodeHandle& node_handle) {
   std::vector<double> cartesian_stiffness_vector;
   std::vector<double> cartesian_damping_vector;
 
   sub_equilibrium_pose_ = node_handle.subscribe(
-      "/equilibrium_pose", 20, &ForceControllerInvDynamics::equilibriumPoseCallback, this,
+      "/equilibrium_pose", 20, &HybridController::equilibriumPoseCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
 
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
-    ROS_ERROR_STREAM("ForceControllerInvDynamics: Could not read parameter arm_id");
+    ROS_ERROR_STREAM("HybridController: Could not read parameter arm_id");
     return false;
   }
   std::vector<std::string> joint_names;
   if (!node_handle.getParam("joint_names", joint_names) || joint_names.size() != 7) {
     ROS_ERROR(
-        "ForceControllerInvDynamics: Invalid or no joint_names parameters provided, "
+        "HybridController: Invalid or no joint_names parameters provided, "
         "aborting controller init!");
     return false;
   }
@@ -53,7 +53,7 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
   auto* model_interface = robot_hw->get<franka_hw::FrankaModelInterface>();
   if (model_interface == nullptr) {
     ROS_ERROR_STREAM(
-        "ForceControllerInvDynamics: Error getting model interface from hardware");
+        "HybridController: Error getting model interface from hardware");
     return false;
   }
   try {
@@ -61,14 +61,14 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
         model_interface->getHandle(arm_id + "_model"));
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
-        "ForceControllerInvDynamics: Exception getting model handle from interface: "
+        "HybridController: Exception getting model handle from interface: "
         << ex.what());
     return false;
   }
 
   auto* state_interface = robot_hw->get<franka_hw::FrankaStateInterface>();
   if (state_interface == nullptr) {
-    ROS_ERROR_STREAM("ForceControllerInvDynamics: Error getting state interface from hardware");
+    ROS_ERROR_STREAM("HybridController: Error getting state interface from hardware");
     return false;
   }
   try {
@@ -76,7 +76,7 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
         state_interface->getHandle(arm_id + "_robot"));
   } catch (hardware_interface::HardwareInterfaceException& ex) {
     ROS_ERROR_STREAM(
-        "ForceControllerInvDynamics: Exception getting state handle from interface: "
+        "HybridController: Exception getting state handle from interface: "
         << ex.what());
     return false;
   }
@@ -84,7 +84,7 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
   auto* effort_joint_interface = robot_hw->get<hardware_interface::EffortJointInterface>();
   if (effort_joint_interface == nullptr) {
     ROS_ERROR_STREAM(
-        "ForceControllerInvDynamics: Error getting effort joint interface from hardware");
+        "HybridController: Error getting effort joint interface from hardware");
     return false;
   }
   for (size_t i = 0; i < 7; ++i) {
@@ -92,7 +92,7 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
       joint_handles_.push_back(effort_joint_interface->getHandle(joint_names[i]));
     } catch (const hardware_interface::HardwareInterfaceException& ex) {
       ROS_ERROR_STREAM(
-          "ForceControllerInvDynamics: Exception getting joint handles: " << ex.what());
+          "HybridController: Exception getting joint handles: " << ex.what());
       return false;
     }
   }
@@ -105,7 +105,7 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
 
       dynamic_reconfigure_compliance_param_node_);
   dynamic_server_compliance_param_->setCallback(
-      boost::bind(&ForceControllerInvDynamics::complianceParamCallback, this, _1, _2));
+      boost::bind(&HybridController::complianceParamCallback, this, _1, _2));
 
   position_d_.setZero();
   orientation_d_.coeffs() << 0.0, 0.0, 0.0, 1.0;
@@ -118,14 +118,14 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
   return true;
 }
 
-void ForceControllerInvDynamics::starting(const ros::Time& /*time*/) {
+void HybridController::starting(const ros::Time& /*time*/) {
   // compute initial velocity with jacobian and set x_attractor and q_d_nullspace
   // to initial configuration
   franka::RobotState initial_state = state_handle_->getRobotState();
   // get jacobian
   std::array<double, 42> jacobian_array =
       model_handle_->getZeroJacobian(franka::Frame::kEndEffector);
-  // convert to eigen
+  // convert to eigenforce_controller_invdynamics
   Eigen::Map<Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1>> dq_initial(initial_state.dq.data());
   Eigen::Map<Eigen::Matrix<double, 7, 1>> q_initial(initial_state.q.data());
@@ -141,7 +141,7 @@ void ForceControllerInvDynamics::starting(const ros::Time& /*time*/) {
   q_d_nullspace_ = q_initial;  // set nullspace equilibrium configuration to initial q
 }
 
-void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
+void HybridController::update(const ros::Time& /*time*/,
                                                  const ros::Duration& period) {
   // get state variables
   franka::RobotState robot_state = state_handle_->getRobotState();
@@ -163,11 +163,15 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
   Eigen::Quaterniond orientation(transform.linear());
 
   // FORCE CONTROL
-  Eigen::Matrix<double, 6,6> kp_force,ki_force;
-  kp_force.setZero();
-  ki_force.setZero();
-  kp_force(axis,axis)= 0.00001;
-  ki_force(axis,axis)= 0.00008;
+  Eigen::Matrix<double, 6,6> kp_force,ki_force, Sf, Id, Sp;
+  kp_force.setIdentity();
+  ki_force.setIdentity();
+  kp_force *= 0.1;
+  ki_force *= 0.1;
+  Sf.setZero();
+  Sf(axis,axis) = 1; //Selection matrix for force (only in z-axis)
+  Id.setIdentity();
+  Sp = Id - Sf; //Selection matrix for position
 
   Eigen:: Matrix<double,6,1> desired_force_torque, err_force;
   desired_force_torque.setZero();
@@ -178,10 +182,14 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
 
   Eigen::VectorXd force_ctrl(6);
   force_ctrl = kp_force*err_force + ki_force*err_force_int;
-  position_d_(axis) += force_ctrl(axis);   // compute error to desired pose
+  // position_d_(axis) += force_ctrl(axis);   // compute error to desired pose
+  if ((abs(desired_force_torque(axis) - force_ext(axis)) < 2) && (position_d_(0) <= 0.5)){ //When contact happens
+    position_d_(0) += 0.00001; //p os_desired[1] -= 0.2;
+    std::cout << "x new: " << position_d_(0)  << std::endl;
+  }
   Eigen::Matrix<double, 6, 1> error;
   error.head(3) << position - position_d_;  // position error
-  std::cout << "error in " << which_axis <<": " << err_force(axis) << std::endl;
+  std::cout << "error in " << which_axis <<": " << error(0) << std::endl;
 
   // orientation error
   if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
@@ -194,28 +202,29 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
   // compute "orientation error"
   error.tail(3) << error_quaternion_angle_axis.axis() * error_quaternion_angle_axis.angle();
 
-  // compute control
+  // compute control+ Sf * force_ctrl
   // allocate variables
-  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7);
+  Eigen::VectorXd tau_task(7), tau_nullspace(7), tau_d(7),tau_force(7);
 
   // pseudoinverse for nullspace handling
   // kinematic pseuoinverse
   Eigen::MatrixXd jacobian_transpose_pinv;
   pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
-
+  tau_force << jacobian.transpose() * (Sf * force_ctrl);
   // Cartesian PD control with damping ratio = 1
   tau_task << jacobian.transpose() *
-                  (-cartesian_stiffness_ * error - cartesian_damping_ * (jacobian * dq));
+                  (Sp * (-cartesian_stiffness_ * error - cartesian_damping_ * (jacobian * dq)));
   // nullspace PD control with damping ratio = 1
   tau_nullspace << (Eigen::MatrixXd::Identity(7, 7) -
                     jacobian.transpose() * jacobian_transpose_pinv) *
                        (nullspace_stiffness_ * (q_d_nullspace_ - q) -
                         (2.0 * sqrt(nullspace_stiffness_)) * dq);
   // Desired torque
-
-  tau_d << tau_task + tau_nullspace + coriolis;
+  tau_d << tau_task + tau_nullspace + coriolis + tau_force;
   // Saturate torque rate to avoid discontinuities
   tau_d << saturateTorqueRate(tau_d, tau_J_d);
+  // std::cout << tau_d.transpose() << std::endl;
+
   for (size_t i = 0; i < 7; ++i) {
     joint_handles_[i].setCommand(tau_d(i));
   }
@@ -231,17 +240,17 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
 
   desired_force_torque_value = filter_params_ * target_desired_force_torque_value + (1 - filter_params_) * desired_force_torque_value;
 
-  position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
-  Eigen::AngleAxisd aa_orientation_d(orientation_d_);
-  Eigen::AngleAxisd aa_orientation_d_target(orientation_d_target_);
-  aa_orientation_d.axis() = filter_params_ * aa_orientation_d_target.axis() +
-                            (1.0 - filter_params_) * aa_orientation_d.axis();
-  aa_orientation_d.angle() = filter_params_ * aa_orientation_d_target.angle() +
-                             (1.0 - filter_params_) * aa_orientation_d.angle();
-  orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
+  // position_d_ = filter_params_ * position_d_target_ + (1.0 - filter_params_) * position_d_;
+  // Eigen::AngleAxisd aa_orientation_d(orientation_d_);
+  // Eigen::AngleAxisd aa_orientation_d_target(orientation_d_target_);
+  // aa_orientation_d.axis() = filter_params_ * aa_orientation_d_target.axis() +
+  //                           (1.0 - filter_params_) * aa_orientation_d.axis();
+  // aa_orientation_d.angle() = filter_params_ * aa_orientation_d_target.angle() +
+  //                            (1.0 - filter_params_) * aa_orientation_d.angle();
+  // orientation_d_ = Eigen::Quaterniond(aa_orientation_d);
 }
 
-Eigen::Matrix<double, 7, 1> ForceControllerInvDynamics::saturateTorqueRate(
+Eigen::Matrix<double, 7, 1> HybridController::saturateTorqueRate(
     const Eigen::Matrix<double, 7, 1>& tau_d_calculated,
     const Eigen::Matrix<double, 7, 1>& tau_J_d) {  // NOLINT (readability-identifier-naming)
   Eigen::Matrix<double, 7, 1> tau_d_saturated{};
@@ -253,7 +262,7 @@ Eigen::Matrix<double, 7, 1> ForceControllerInvDynamics::saturateTorqueRate(
   return tau_d_saturated;
 }
 
-void ForceControllerInvDynamics::complianceParamCallback(
+void HybridController::complianceParamCallback(
     franka_more_controllers::compliance_paramConfig& config,
     uint32_t /*level*/) {
   cartesian_stiffness_target_.setIdentity();
@@ -262,6 +271,7 @@ void ForceControllerInvDynamics::complianceParamCallback(
   cartesian_stiffness_target_.bottomRightCorner(3, 3)
       << config.rotational_stiffness * Eigen::Matrix3d::Identity();
   cartesian_stiffness_target_(axis,axis) = 20.0;
+  cartesian_stiffness_target_(0,0) = 150.0;
 
   cartesian_damping_target_.setIdentity();
   // Damping ratio = 1
@@ -274,7 +284,7 @@ void ForceControllerInvDynamics::complianceParamCallback(
 
 }
 
-void ForceControllerInvDynamics::equilibriumPoseCallback(
+void HybridController::equilibriumPoseCallback(
     const geometry_msgs::PoseStampedConstPtr& msg) {
   position_d_target_ << msg->pose.position.x, msg->pose.position.y, msg->pose.position.z;
   Eigen::Quaterniond last_orientation_d_target(orientation_d_target_);
@@ -287,5 +297,5 @@ void ForceControllerInvDynamics::equilibriumPoseCallback(
 
 }  // namespace franka_more_controllers
 
-PLUGINLIB_EXPORT_CLASS(franka_more_controllers::ForceControllerInvDynamics,
+PLUGINLIB_EXPORT_CLASS(franka_more_controllers::HybridController,
                        controller_interface::ControllerBase)

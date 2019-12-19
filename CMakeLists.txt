@@ -51,10 +51,10 @@ catkin_package(
 add_library(franka_more_controllers
   src/force_controller.cpp
   src/force_controller_invdynamics.cpp
-
+  src/hybrid_controller.cpp
 )
 
-add_dependencies(franka_more_controllers 
+add_dependencies(franka_more_controllers
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_generate_messages_cpp
