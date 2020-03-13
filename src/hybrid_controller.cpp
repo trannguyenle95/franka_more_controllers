@@ -12,6 +12,7 @@
 #include "pseudo_inversion.h"
 
 namespace franka_more_controllers {
+Eigen::Matrix<double,6,1> f_measured_hybrid;
 
 bool HybridController::init(hardware_interface::RobotHW* robot_hw,
                                                ros::NodeHandle& node_handle) {
@@ -21,6 +22,8 @@ bool HybridController::init(hardware_interface::RobotHW* robot_hw,
   sub_equilibrium_pose_ = node_handle.subscribe(
       "/equilibrium_pose", 20, &HybridController::equilibriumPoseCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
+  sub_forcetorque_sensor = node_handle.subscribe<geometry_msgs::WrenchStamped>("/netft_data", 1, &HybridController::updateFTsensor, this,ros::TransportHints().reliable().tcpNoDelay());
+  publisher = node_handle.advertise<std_msgs::Float64MultiArray>("position_force", 1000);
 
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
@@ -140,7 +143,16 @@ void HybridController::starting(const ros::Time& /*time*/) {
 
   q_d_nullspace_ = q_initial;  // set nullspace equilibrium configuration to initial q
 }
-
+void HybridController::updateFTsensor(const geometry_msgs::WrenchStamped::ConstPtr &msg){
+  geometry_msgs::Wrench f_meas = msg->wrench;
+	// f_cur_buffer_ = f_meas.force.x;
+  f_measured_hybrid(0) = f_meas.force.x;
+  f_measured_hybrid(1) = f_meas.force.y;
+  f_measured_hybrid(2) = f_meas.force.z;
+  f_measured_hybrid(3) = f_meas.torque.x;
+  f_measured_hybrid(4) = f_meas.torque.y;
+  f_measured_hybrid(5) = f_meas.torque.z;
+}
 void HybridController::update(const ros::Time& /*time*/,
                                                  const ros::Duration& period) {
   // get state variables
@@ -157,6 +169,7 @@ void HybridController::update(const ros::Time& /*time*/,
   Eigen::Map<Eigen::Matrix<double, 7, 1>> tau_J_d(  // NOLINT (readability-identifier-naming)
       robot_state.tau_J_d.data());
   Eigen::Map<Eigen::Matrix<double, 6, 1> > force_ext(robot_state.O_F_ext_hat_K.data());
+  Eigen::Matrix<double, 6, 1>  cart_velocity;
 
   Eigen::Affine3d transform(Eigen::Matrix4d::Map(robot_state.O_T_EE.data()));
   Eigen::Vector3d position(transform.translation());
@@ -166,8 +179,8 @@ void HybridController::update(const ros::Time& /*time*/,
   Eigen::Matrix<double, 6,6> kp_force,ki_force, Sf, Id, Sp;
   kp_force.setIdentity();
   ki_force.setIdentity();
-  kp_force *= 0.1;
-  ki_force *= 0.1;
+  kp_force *= 0.11;
+  ki_force *= 0.14;
   Sf.setZero();
   Sf(axis,axis) = 1; //Selection matrix for force (only in z-axis)
   Id.setIdentity();
@@ -177,20 +190,29 @@ void HybridController::update(const ros::Time& /*time*/,
   desired_force_torque.setZero();
   desired_force_torque(axis) = desired_force_torque_value;
 
-  err_force = desired_force_torque - force_ext;
+  err_force = desired_force_torque - f_measured_hybrid;
   err_force_int += err_force*period.toSec(); //integral term of force error
 
   Eigen::VectorXd force_ctrl(6);
   force_ctrl = kp_force*err_force + ki_force*err_force_int;
   // position_d_(axis) += force_ctrl(axis);   // compute error to desired pose
-  if ((abs(desired_force_torque(axis) - force_ext(axis)) < 2) && (position_d_(0) <= 0.5)){ //When contact happens
-    position_d_(0) += 0.00001; //p os_desired[1] -= 0.2;
+  if ((abs(desired_force_torque(axis) - f_measured_hybrid(axis)) < 2.5) && (position(0) <= 0.5)){ //When contact happens
+    position_d_(0) += 0.00001; // 0.00001
     std::cout << "x new: " << position_d_(0)  << std::endl;
   }
   Eigen::Matrix<double, 6, 1> error;
   error.head(3) << position - position_d_;  // position error
-  std::cout << "error in " << which_axis <<": " << error(0) << std::endl;
+  std::cout << "error in " << which_axis <<": " << err_force(axis) << std::endl;
 
+  cart_velocity = jacobian * dq;
+  std_msgs::Float64MultiArray msg;
+  msg.data.clear();
+  msg.data.push_back(position(0));
+  msg.data.push_back(position(1));
+  msg.data.push_back(position(2));
+  msg.data.push_back(f_measured_hybrid(0));
+  msg.data.push_back(f_measured_hybrid(2));
+  publisher.publish(msg);
   // orientation error
   if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {
     orientation.coeffs() << -orientation.coeffs();
@@ -211,6 +233,7 @@ void HybridController::update(const ros::Time& /*time*/,
   Eigen::MatrixXd jacobian_transpose_pinv;
   pseudoInverse(jacobian.transpose(), jacobian_transpose_pinv);
   tau_force << jacobian.transpose() * (Sf * force_ctrl);
+
   // Cartesian PD control with damping ratio = 1
   tau_task << jacobian.transpose() *
                   (Sp * (-cartesian_stiffness_ * error - cartesian_damping_ * (jacobian * dq)));
@@ -271,7 +294,7 @@ void HybridController::complianceParamCallback(
   cartesian_stiffness_target_.bottomRightCorner(3, 3)
       << config.rotational_stiffness * Eigen::Matrix3d::Identity();
   cartesian_stiffness_target_(axis,axis) = 20.0;
-  cartesian_stiffness_target_(0,0) = 150.0;
+  cartesian_stiffness_target_(0,0) = 275.0; //150
 
   cartesian_damping_target_.setIdentity();
   // Damping ratio = 1

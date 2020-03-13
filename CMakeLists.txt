@@ -52,6 +52,7 @@ add_library(franka_more_controllers
   src/force_controller.cpp
   src/force_controller_invdynamics.cpp
   src/hybrid_controller.cpp
+  src/GravityCompensation.cpp
 )
 
 add_dependencies(franka_more_controllers

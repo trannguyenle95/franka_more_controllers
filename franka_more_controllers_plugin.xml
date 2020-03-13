@@ -14,4 +14,11 @@
         Hybrid force motion controller with inverse dynamics
     </description>
   </class>
+    <class name="franka_more_controllers/GravityCompensation" type="GravityCompensation"
+       base_class_type="controller_interface::ControllerBase">
+    <description>
+        The controller sends zero torque to all joints of the robot. The
+        gravity will be compensated by the robot.
+    </description>
+</class>
 </library>

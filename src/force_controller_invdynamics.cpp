@@ -12,7 +12,7 @@
 #include "pseudo_inversion.h"
 
 namespace franka_more_controllers {
-
+Eigen::Matrix<double,6,1> f_measured;
 bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
                                                ros::NodeHandle& node_handle) {
   std::vector<double> cartesian_stiffness_vector;
@@ -21,6 +21,8 @@ bool ForceControllerInvDynamics::init(hardware_interface::RobotHW* robot_hw,
   sub_equilibrium_pose_ = node_handle.subscribe(
       "/equilibrium_pose", 20, &ForceControllerInvDynamics::equilibriumPoseCallback, this,
       ros::TransportHints().reliable().tcpNoDelay());
+  // Subscribe from F/T sensor
+  sub_forcetorque_sensor = node_handle.subscribe<geometry_msgs::WrenchStamped>("/netft_data", 1, &ForceControllerInvDynamics::updateFTsensor, this,ros::TransportHints().reliable().tcpNoDelay());
 
   std::string arm_id;
   if (!node_handle.getParam("arm_id", arm_id)) {
@@ -140,7 +142,16 @@ void ForceControllerInvDynamics::starting(const ros::Time& /*time*/) {
 
   q_d_nullspace_ = q_initial;  // set nullspace equilibrium configuration to initial q
 }
-
+void ForceControllerInvDynamics::updateFTsensor(const geometry_msgs::WrenchStamped::ConstPtr &msg){
+  geometry_msgs::Wrench f_meas = msg->wrench;
+	// f_cur_buffer_ = f_meas.force.x;
+  f_measured(0) = f_meas.force.x;
+  f_measured(1) = f_meas.force.y;
+  f_measured(2) = f_meas.force.z;
+  f_measured(3) = f_meas.torque.x;
+  f_measured(4) = f_meas.torque.y;
+  f_measured(5) = f_meas.torque.z;
+}
 void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
                                                  const ros::Duration& period) {
   // get state variables
@@ -173,15 +184,18 @@ void ForceControllerInvDynamics::update(const ros::Time& /*time*/,
   desired_force_torque.setZero();
   desired_force_torque(axis) = desired_force_torque_value;
 
-  err_force = desired_force_torque - force_ext;
+  err_force = desired_force_torque - f_measured;
   err_force_int += err_force*period.toSec(); //integral term of force error
 
   Eigen::VectorXd force_ctrl(6);
   force_ctrl = kp_force*err_force + ki_force*err_force_int;
-  position_d_(axis) += force_ctrl(axis);   // compute error to desired pose
+  // position_d_(axis) += force_ctrl(axis);   // compute error to desired pose for z
+  position_d_(axis) -= force_ctrl(axis);   // compute error to desired pose for x
+
   Eigen::Matrix<double, 6, 1> error;
   error.head(3) << position - position_d_;  // position error
   std::cout << "error in " << which_axis <<": " << err_force(axis) << std::endl;
+  // std::cout << "error in " << which_axis <<": " << f_measured(axis) << std::endl;
 
   // orientation error
   if (orientation_d_.coeffs().dot(orientation.coeffs()) < 0.0) {

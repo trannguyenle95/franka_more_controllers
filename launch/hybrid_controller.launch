@@ -6,6 +6,8 @@
     <arg name="robot_ip" value="$(arg robot_ip)" />
     <arg name="load_gripper" value="$(arg load_gripper)" />
   </include>
+ <param name="publish_frequency" value="50.0" type="double" />
+  <node name="netft_node" pkg="netft_utils" type="netft_node" respawn="false" output="screen" args="192.168.1.1"/>
 
   <arg name="axis"  default="random"/>
   <param name="applied_axis" type="string" value="$(arg axis)"/>
@@ -15,6 +17,9 @@
 
   <rosparam command="load" file="$(find franka_more_controllers)/config/franka_more_controllers.yaml"  />
   <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen"  args="hybrid_controller"/>
-  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_more_controllers)/launch/rviz/robot.rviz"/>
+  <node pkg="rviz" type="rviz" output="screen" name="rviz" args="-d $(find franka_example_controllers)/launch/robot.rviz"/>
   <node name="rqt_reconfigure" pkg="rqt_reconfigure" type="rqt_reconfigure" required="false" />
+  <node name="dynamic_reconfigure_compliance_param_node" pkg="dynamic_reconfigure" type="dynparam"
+       args="set dynamic_reconfigure_compliance_param_node desired_force_torque $(arg desired_force)" />
 </launch>
+
